@@ -3839,8 +3839,6 @@ async def a_test_organizations(admin: KeycloakAdmin, realm: str) -> None:
     :param realm: Keycloak realm
     :type realm: str
     """
-    # Organizations was only release in KeyCloak 26, so disable these checks
-    # for older KeyCloak releases
     if os.environ["KEYCLOAK_DOCKER_IMAGE_TAG"] != "latest" and Version(
         os.environ["KEYCLOAK_DOCKER_IMAGE_TAG"]
     ) < Version("26"):
@@ -3865,6 +3863,10 @@ async def a_test_organizations(admin: KeycloakAdmin, realm: str) -> None:
     user_id = await admin.a_create_user(payload={"username": "test", "email": "test@test.test"})
     await admin.a_organization_user_add(user_id, org_id)
 
+    # Count members after adding 1
+    count = await admin.a_organization_members_count(org_id)
+    assert count == 1, count
+
     users = await admin.a_get_organization_members(org_id)
     assert len(users) == 1, users
     assert users[0]["id"] == user_id, users[0]["id"]
@@ -3874,18 +3876,26 @@ async def a_test_organizations(admin: KeycloakAdmin, realm: str) -> None:
     assert user_orgs[0]["name"] == "test-org01", user_orgs[0]["name"]
 
     await admin.a_organization_user_remove(user_id, org_id)
+
     users = await admin.a_get_organization_members(org_id)
     assert len(users) == 0, users
+
+    # Count members after removing all
+    count = await admin.a_organization_members_count(org_id)
+    assert count == 0, count
 
     for i in range(admin.PAGE_SIZE + 50):
         user_id = await admin.a_create_user(
             payload={"username": f"test-user{i:02d}", "email": f"test-user{i:02d}@test.test"}
         )
-
         await admin.a_organization_user_add(user_id, org_id)
 
     users = await admin.a_get_organization_members(org_id)
     assert len(users) == admin.PAGE_SIZE + 50, users
+
+    # Count members after bulk add
+    count = await admin.a_organization_members_count(org_id)
+    assert count == admin.PAGE_SIZE + 50, count
 
     users = await admin.a_get_organization_members(
         org_id, query={"first": 100, "max": -1, "search": ""}
